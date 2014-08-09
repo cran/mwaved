@@ -26,7 +26,7 @@ NULL
 #' @name directBlur
 #' @title Direct kernel
 #' @description Creates appropriately sized blur matrix for the special case when no blurring is apparent.
-#' @details Function creates a matrix of dimensin n by m which contains appropriate entries for the case when a direct multichannel signal is observed. That is, no blurring operator is apparent. This is the default argument for the blurring matrix to all the multichannel functions in the \code{mwaved} package.
+#' @details Function creates a matrix of dimension n by m which contains appropriate entries for the case when a direct multichannel signal is observed. That is, no blurring operator is apparent. This is the default argument for the blurring matrix to all the multichannel functions in the \code{mwaved} package.
 #' @param G.dim A numeric vector with two elements specifying the values of n and m respectively
 #' @export
 directBlur <- function(G.dim){
@@ -38,17 +38,17 @@ directBlur <- function(G.dim){
 # Function to check resolution levels are sane
 feasibleResolutions <- function(n, j0, j1){
   J <- log2(n) - 1
-  if ( j0 < 1 ){
+  if (j0 < 1) {
     warning("j0 must be a positive integer, setting to default j0 = 3.")
     j0 <- 3
   }
   
-  if ( !is.na(j1) ){
-    if( j1 > J ){
+  if (!is.na(j1)) {
+    if (j1 > J ) {
       warning(paste('Specified j1 = ', j1, ' is too large. j1 set to ', J, sep = ""))
       j1 <- J
     } else {
-      if( j1 < j0){
+      if (j1 < j0) {
         warning(paste('j1 cannot be smaller than j0 = ', j0,'. j1 set to ', j0, sep = ""))
         j1 <- j0
       }
@@ -61,11 +61,11 @@ feasibleResolutions <- function(n, j0, j1){
 # Check the dimensions of alpha are sane
 feasibleAlpha <- function(m, alpha){
   ma <- length(alpha)
-  if (m != ma){
-    if ( ma == 1){
+  if (m != ma) {
+    if ( ma == 1) {
       alpha <- rep(alpha, m)
     } else {
-      if ( m > ma ){
+      if ( m > ma ) {
         warning("Dimension mismatch: Length of alpha too short (not the same as the number of columns of Y). Last element of alpha repeated for the remaining channels.")
         alpha <- c(alpha, rep(rev(alpha)[1], m - ma))  
       } else {
@@ -79,30 +79,30 @@ feasibleAlpha <- function(m, alpha){
 
 # Check signal length is long enough to avoid computation errors in C code
 feasibleLength <- function(n){
-  if (n < 16){
+  if (n < 16) {
     stop("Signal length too small. Need at least 16 observations.")
   }
   J <- log2(n)
-  if( (J %% 1) > 0){
+  if ((J %% 1) > 0) {
     warning("Input signal has length, n, which is not a power of 2.")
   }
 }
 
 # Check blur identification string 
 feasibleBlur <- function(blur){
-    if(blur != 'direct'){
-      if(blur != 'smooth'){
-        if(blur != 'box.car'){
-          stop("unrecognised blur input. Please choose 'direct', 'smooth' or 'box.car'.")
-        }
+  if (blur != 'direct') {
+    if (blur != 'smooth') {
+      if (blur != 'box.car') {
+        stop("unrecognised blur input. Please choose 'direct', 'smooth' or 'box.car'.")
       }
     }
+  }
 }
 
 feasibleShrinkage <- function(shrinkType){
-  if(shrinkType != 'hard'){
-    if(shrinkType != 'soft'){
-      if(shrinkType != 'garrote'){
+  if (shrinkType != 'hard') {
+    if (shrinkType != 'soft') {
+      if (shrinkType != 'garrote') {
         stop("unrecognised shrinkType input. Please choose 'soft', 'hard' or 'garrote'.")
       }
     }
@@ -156,14 +156,19 @@ multiSigma <- function(Y, deg = 3L){
 #' library(mwaved)
 #' # Make a noiseless doppler function
 #' n <- 2^8
-#' t <- (1:n)/n
+#' x <- (1:n)/n
 #' y <- makeDoppler(n)
 #' # Determine the wavelet coefficients
 #' beta <- multiCoef(y)
 #' # plot three raw wavelet expansions truncating in each case at j1 = 3, 4 and 5 respectively
-#' plot(t, y, type = 'l', main = 'Doppler and wavelet projections at three different truncations')
-#' matlines(t,sapply(3:5, function(i) multiProj(beta,j1 = i)),type = 'l', col = 2:4)
-#' legend("bottomright", legend = c("Signal", paste('j1 =', 3:5)), col = 1:4, lty = c(1,1:4))
+#' plot(x, y, type = 'l', main = 'Doppler and wavelet projections at three different truncations')
+#' j0 <- 3
+#' j1 <- 5
+#' j <- j0:j1
+#' lcols <- c(1, j - j0 + 2)
+#' ltys <-  c(1, 1:length(j))
+#' matlines(x, sapply(j, function(i) multiProj(beta, j1 = i)), type = 'l', col = lcols[-1])
+#' legend("bottomright", legend = c("Signal", paste('j1 =', j)), col = lcols, lty =ltys)
 #' @export
 multiProj <- function(beta, j1 = log2(length(beta$coef)) - 1) {
   coefs <- beta$coef
@@ -188,7 +193,7 @@ multiProj <- function(beta, j1 = log2(length(beta$coef)) - 1) {
 #' \item 'box.car': Indirect signal observed and the blurring kernel is of box car type.}
 #' @param j0 The coarsest resolution level for the wavelet expansion.
 #' @param j1 The finest resolution level for the wavelet expansion. If unspecified, the function will compute all thresholds up to the maximum possible resolution level at j1 = log2(n) - 1.
-#' @param eta The smoothing parameter. The default level is 2*sqrt(alpha_{l_*}) or 2*sqrt(alpha_*) for the smooth and box car case respetively. (see Kulik, Sapatinas and Wishart (2014) for details and justification)
+#' @param eta The smoothing parameter. The default level is \eqn{2\sqrt(\alpha^*)} where \eqn{\alpha^*} is an optimal level depending on the type of blur. (see Kulik, Sapatinas and Wishart (2014) for details and justification)
 #' 
 #' @details Given an input matrix of a multichannel signal (n rows and n columns) with m channels and n observations per channel, the function returns the required thresholds for the hard-thresholding estimator of the underlying function, f.
 #' 
@@ -197,7 +202,6 @@ multiProj <- function(beta, j1 = log2(length(beta$coef)) - 1) {
 #' # Simulate the multichannel doppler signal.
 #' m <- 3
 #' n <- 2^10
-#' t <- (1:n)/n
 #' signal <- makeDoppler(n)
 #' # Noise levels per channel
 #' e <- rnorm(m*n)
@@ -227,7 +231,7 @@ multiThresh <- function(Y, G = directBlur(dim(as.matrix(Y))), alpha = rep(1,dim(
   Y <- as.matrix(Y)
   G <- as.matrix(G)
   dimY <- dim(Y)
-  if ( any(dimY != dim(G)) ){
+  if (any(dimY != dim(G))) {
     stop('Dimensions of Y and G do not match')
   }
   feasibleLength(dimY[1])
@@ -239,7 +243,7 @@ multiThresh <- function(Y, G = directBlur(dim(as.matrix(Y))), alpha = rep(1,dim(
 
 #' @title Wavelet coefficient estimation from a multichannel signal
 #' 
-#' @description Estimates the wavelet coefficiets for the underlying signal of interest embedded in the noisy multichannel deconvolution model. 
+#' @description Estimates the wavelet coefficients for the underlying signal of interest embedded in the noisy multichannel deconvolution model. 
 #' 
 #' @inheritParams multiThresh
 #' @param thresh A numeric vector of resolution level thresholds to use in the wavelet thresholded estimator of the true signal. It should have enough elements to construct the required expansion with all resolutions. That is, have \code{j1} - \code{j0} + 2 elements. If a single element is input, it is repeated to be the universal threshold across all resolutions.
@@ -255,7 +259,6 @@ multiThresh <- function(Y, G = directBlur(dim(as.matrix(Y))), alpha = rep(1,dim(
 #' # Simulate the multichannel doppler signal.
 #' m <- 3
 #' n <- 2^10
-#' t <- (1:n)/n
 #' signal <- makeDoppler(n)
 #' # Noise levels per channel
 #' e <- rnorm(m*n)
@@ -268,14 +271,18 @@ multiThresh <- function(Y, G = directBlur(dim(as.matrix(Y))), alpha = rep(1,dim(
 #' # Create error with custom signal to noise ratio
 #' SNR <- c(10,15,20)
 #' sigma <- sigmaSNR(X, SNR)
-#' alpha <- c(0.75, 0.8, 1)
+#' if (require(fracdiff)) {
+#'   alpha <- c(0.75, 0.8, 1)
+#' } else {
+#'   alpha <- rep(1, m)
+#' }
 #' E <- multiNoise(n, sigma, alpha)
 #' # Create noisy & blurred multichannel signal
 #' Y <- X + E
 #' plot(signal, type='l', lty='dashed', main='dashed: True signal, solid: multichannel signals')
 #' matlines(Y)
 #' # Estimate the wavelet coefficients
-#' estimatedCoefs <- multiCoef(Y, G, alpha = rep(1,m), blur = 'smooth')
+#' estimatedCoefs <- multiCoef(Y, G, alpha = alpha, blur = 'smooth')
 #' plot(estimatedCoefs)
 #' # Compute true wavelet coefficients
 #' trueCoefs <- multiCoef(signal)
@@ -288,7 +295,7 @@ multiCoef <- function(Y, G = directBlur(dim(as.matrix(Y))), alpha = rep(1,dim(as
   Y <- as.matrix(Y)
   G <- as.matrix(G)
   dimY <- dim(Y)
-  if ( any(dimY != dim(G)) ){
+  if (any(dimY != dim(G))) {
     stop('Dimensions of Y and G do not match')
   }
   feasibleLength(dimY[1])
@@ -298,7 +305,7 @@ multiCoef <- function(Y, G = directBlur(dim(as.matrix(Y))), alpha = rep(1,dim(as
   blur <- tolower(blur)
   feasibleBlur(blur)
   # Pass to C code
-  .Call('mwaved_multiCoef', Y, G, alpha, blur, jvals$j0, jvals$j1, thresh, eta, deg)
+  .Call('mwaved_multiCoef', Y, G, alpha, jvals$j0, jvals$j1, thresh, deg)
 }
 
 #' @title Apply thresholding regime to a set of wavelet coefficients
@@ -332,42 +339,49 @@ multiCoef <- function(Y, G = directBlur(dim(as.matrix(Y))), alpha = rep(1,dim(as
 #' # Simulate the multichannel doppler signal.
 #' m <- 3
 #' n <- 2^10
-#' t <- (1:n)/n
 #' signal <- makeDoppler(n)
 #' # Noise levels per channel
-#' e <- rnorm(m*n)
+#' e <- rnorm(m * n)
 #' # Create Gamma blur
 #' shape <- seq(from = 0.5, to = 1, length = m)
-#' scale <- rep(0.25,m)
+#' scale <- rep(0.25, m)
 #' G <- gammaBlur(n, shape = shape, scale = scale)
 #' # Convolve the signal
 #' X <- blurSignal(signal, G)
 #' # Create error with custom signal to noise ratio
-#' SNR <- c(10,15,20)
+#' SNR <- c(10, 15, 20)
 #' sigma <- sigmaSNR(X, SNR)
-#' alpha <- c(0.75, 0.8, 1)
+#' if (require(fracdiff)){
+#'   alpha <- c(0.75, 0.8, 1)
+#' } else {
+#'   alpha <- rep(1, m)
+#' }
 #' E <- multiNoise(n, sigma, alpha)
 #' # Create noisy & blurred multichannel signal
 #' Y <- X + E
 #' # Determine thresholds
 #' thresh <- multiThresh(Y, G, blur = 'smooth')
 #' beta <- multiCoef(Y, G)
-#' plot(beta, coefTrim = waveletThresh(beta, thresh))
+#' betaShrunk <- waveletThresh(beta, thresh)
+#' plot(beta, betaShrunk)
 #' @export 
 waveletThresh <- function(beta, thresh = 0, shrinkType = 'hard'){
+  if (class(beta) != "waveletCoef") {
+    stop('beta needs to be a waveletCoef object.')
+  }
   nthr <- length(thresh)
-  j0 <- beta$j0
-  req <- log2(length(beta$coef)) - j0
-  j1 <- j0 + req
+  
+  req <- log2(length(beta$coef)) - beta$j0
+  j1 <- beta$j0j0 + req
   # convert to lower case to avoid trivial issues
   shrinkType <- tolower(shrinkType)
   feasibleShrinkage(shrinkType)
-  if ( any(thresh < 0) ){
+  if (any(thresh < 0)) {
     stop("Input thresholds must all be non-negative.")
   }
   
-  if ( nthr == 1 ){
-    if( thresh == 0 ){
+  if (nthr == 1 ) {
+    if (thresh == 0) {
       thresh <- rep(0, req)  
     } else {
       warning("thresh input vector only has one element. Universal threshold applied on all resolutions.")
@@ -376,12 +390,11 @@ waveletThresh <- function(beta, thresh = 0, shrinkType = 'hard'){
     
   }
   
-  if ( nthr < req ){
+  if (nthr < req ){
     warning("Thresh input length too small, last element repeated in higher resolutions.")
     thresh <- c(thresh, rep(thresh[nthr], req - nthr))
   }
-
-  return(.Call('mwaved_waveletThresh', beta, thresh, shrinkType))
+  return(.Call('mwaved_waveletThresh', beta$coef, thresh, shrinkType, beta$j0, beta$deg))
 }
 
 
@@ -396,25 +409,28 @@ waveletThresh <- function(beta, thresh = 0, shrinkType = 'hard'){
 #' # Simulate the multichannel doppler signal.
 #' m <- 3
 #' n <- 2^10
-#' t <- (1:n)/n
 #' signal <- makeDoppler(n)
 #' # Noise levels per channel
-#' e <- rnorm(m*n)
+#' e <- rnorm(m * n)
 #' # Create Gamma blur
 #' shape <- seq(from = 0.5, to = 1, length = m)
-#' scale <- rep(0.25,m)
+#' scale <- rep(0.25, m)
 #' G <- gammaBlur(n, shape = shape, scale = scale)
 #' # Convolve the signal
 #' X <- blurSignal(signal, G)
 #' # Create error with custom signal to noise ratio
-#' SNR <- c(10,15,20)
+#' SNR <- c(10, 15, 20)
 #' sigma <- sigmaSNR(X, SNR)
-#' alpha <- c(0.75, 0.8, 1)
+#' if (require(fracdiff)) {
+#'   alpha <- c(0.75, 0.8, 1)
+#' } else {
+#'   alpha <- rep(1, m)
+#' }
 #' E <- multiNoise(n, sigma, alpha)
 #' # Create noisy & blurred multichannel signal
 #' Y <- X + E
 #' # Compute mWaveD object
-#' mWaveDObj <- multiWaveD(Y, G = G, alpha = rep(1, m), blur = 'smooth')
+#' mWaveDObj <- multiWaveD(Y, G = G, alpha = alpha, blur = 'smooth')
 #' plot(mWaveDObj)
 #' summary(mWaveDObj)
 #' 
@@ -427,7 +443,7 @@ multiWaveD <- function(Y, G = directBlur(dim(as.matrix(Y))), alpha = rep(1,dim(a
   Y <- as.matrix(Y)
   G <- as.matrix(G)
   dimY <- dim(Y)
-  if ( any(dimY != dim(G)) ){
+  if (any(dimY != dim(G))) {
     stop('Dimensions of Y and G do not match')
   }
   feasibleLength(dimY[1])
@@ -457,40 +473,44 @@ multiWaveD <- function(Y, G = directBlur(dim(as.matrix(Y))), alpha = rep(1,dim(a
 #' # Simulate the multichannel doppler signal.
 #' m <- 3
 #' n <- 2^10
-#' t <- (1:n)/n
+#' x <- (1:n)/n
 #' signal <- makeDoppler(n)
 #' # Noise levels per channel
-#' e <- rnorm(m*n)
+#' e <- rnorm(m * n)
 #' # Create Gamma blur
 #' shape <- seq(from = 0.5, to = 1, length = m)
-#' scale <- rep(0.25,m)
+#' scale <- rep(0.25, m)
 #' G <- gammaBlur(n, shape = shape, scale = scale)
 #' # Convolve the signal
 #' X <- blurSignal(signal, G)
 #' # Create error with custom signal to noise ratio
-#' SNR <- c(10,15,20)
+#' SNR <- c(10, 15, 20)
 #' sigma <- sigmaSNR(X, SNR)
-#' alpha <- c(0.75, 0.8, 1)
+#' if (require(fracdiff)) {
+#'   alpha <- c(0.75, 0.8, 1)
+#' } else {
+#'   alpha <- rep(1, m)
+#' }
 #' E <- multiNoise(n, sigma, alpha)
 #' # Create noisy & blurred multichannel signal
 #' Y <- X + E
 #' # Estimate the underlying doppler signal
 #' dopplerEstimate <- multiEstimate(Y, G = G, alpha = rep(1, m), blur = 'smooth')
 #' # Plot the result and compare with truth
-#' par(mfrow=c(2,1))
-#' matplot(t, Y, type = 'l', main = 'Noisy multichannel signal')
-#' plot(t, signal, type = 'l', lty = 2, main = 'True Doppler signal and estimate', col = 'red')
-#' lines(t, dopplerEstimate)
+#' par(mfrow=c(2, 1))
+#' matplot(x, Y, type = 'l', main = 'Noisy multichannel signal')
+#' plot(x, signal, type = 'l', lty = 2, main = 'True Doppler signal and estimate', col = 'red')
+#' lines(x, dopplerEstimate)
 #' 
 #' @export
 multiEstimate <- function(Y, G = directBlur(dim(as.matrix(Y))), alpha = rep(1,dim(as.matrix(Y))[2]), 
                           blur = "direct", sigma = as.numeric(c()), j0 = 3L, j1 = NA_integer_, 
                           eta = NA_real_, thresh = multiThresh(as.matrix(Y), G = G, alpha = alpha,
-                          blur = blur, j0 = j0, j1 = j1, eta = eta, deg = 3L) , shrinkType = "hard", deg = 3L) {
+                                                               blur = blur, j0 = j0, j1 = j1, eta = eta, deg = 3L) , shrinkType = "hard", deg = 3L) {
   Y <- as.matrix(Y)
   G <- as.matrix(G)
   dimY <- dim(Y)
-  if ( any(dimY != dim(G)) ){
+  if (any(dimY != dim(G))) {
     stop('Dimensions of Y and G do not match')
   }
   feasibleLength(dimY[1])
