@@ -24,19 +24,67 @@
 #' @docType package
 NULL
 #' @name directBlur
-#' @title Direct kernel
+#' @title Direct kernel matrix
 #' @description Creates appropriately sized blur matrix for the special case when no blurring is apparent.
 #' @details Function creates a matrix of dimension n by m which contains appropriate entries for the case when a direct multichannel signal is observed. That is, no blurring operator is apparent. This is the default argument for the blurring matrix to all the multichannel functions in the \code{mwaved} package.
-#' @param G.dim A numeric vector with two elements specifying the values of n and m respectively
+#' @param n Number of observations in each channel
+#' @param m Number of channels
 #' @export
-directBlur <- function(G.dim){
-  y <- matrix(0, G.dim[1], G.dim[2])
-  y[1,] <- 1 
-  y
+directBlur <- function(n, m = 1){
+  stopifnot(is.vector(n), length(n)==1, is.vector(m), length(m) == 1)
+  .Call('mwaved_directBlur', n, m)
+}
+
+#' @name detectBlur
+#' @title Detect type of blur
+#' @description Detect the form of the input blur matrix, G
+#' @details Detects if the input blur matrix, G, has uniform structure in being of direct blur type everywhere or box.car type everywhere. In those cases, it will return a character string 'direct' or 'box.car' respectively, otherwise it returns 'smooth'. This is done in the direct blur case by checking that the mvfft(G) is equal to 1 everywhere (complex part is zero everywhere) and in the box.car case by checking that each column has two unique values, a zero and positive value. If the blur type is not identified to be direct or box.car, the string 'smooth' is returned.
+#' @param G The input blur matrix to be analysed and checked whether it corresponds to direct blur or box.car blur.
+#' @export
+detectBlur <- function(G) {
+  stopifnot(is.matrix(G), !is.complex(G))
+  if (.Call('mwaved_directDetect', G)) {
+    blur <- 'direct'
+  } else {
+    if (.Call('mwaved_boxcarDetect', G)) {
+      blur <- 'box.car'
+    } else {
+      blur <- 'smooth'
+    }
+  }
+  blur
+}
+
+#' @title Select appropriate resolution method for blur type
+#' @description Simple function that maps the blur type to the appropriate resolution selection method
+#' @param blur A character string that specifies the behaviour of the blur function \itemize{
+#' \item 'direct': No blur or direct model is used.
+#' \item 'smooth': Blur that has smooth decay in the Fourier domain.
+#' \item 'box.car': Blur that is of box.car type.
+#' }
+#' @export
+resolutionMethod <- function(blur) {
+  stopifnot(is.character(blur), length(blur) == 1)
+  switch(blur,
+         smooth = 'smooth',
+         direct = 'smooth',
+         box.car = 'block')
+}
+
+# check if blur input method is consistent with observed G input
+blurCheck <- function(G, resolution) {
+  stopifnot(is.character(resolution), length(resolution) == 1, is.matrix(G))
+  detected <- detectBlur(G)
+  # Possible issues if box.car method is identified and smooth selection rule is used.
+  if (detected == 'box.car' && resolution == 'smooth') {
+    warning(paste0('resolution = "smooth" specified but input G appears to be box.car.\n Danger of early truncation and j1 being too small, suggest change resolution selection method to "block".\n'))
+  }
+  detected
 }
 
 # Function to check resolution levels are sane
 feasibleResolutions <- function(n, j0, j1){
+  stopifnot(is.numeric(n), length(n) == 1, is.numeric(j0), length(j0) == 1, is.numeric(j1), length(j1) == 1)
   J <- log2(n) - 1
   if (j0 < 1) {
     warning("j0 must be a positive integer, setting to default j0 = 3.")
@@ -44,7 +92,7 @@ feasibleResolutions <- function(n, j0, j1){
   }
   
   if (!is.na(j1)) {
-    if (j1 > J ) {
+    if (j1 > J) {
       warning(paste('Specified j1 = ', j1, ' is too large. j1 set to ', J, sep = ""))
       j1 <- J
     } else {
@@ -60,6 +108,7 @@ feasibleResolutions <- function(n, j0, j1){
 
 # Check the dimensions of alpha are sane
 feasibleAlpha <- function(m, alpha){
+  stopifnot(is.numeric(m), length(m) == 1, is.numeric(alpha))
   ma <- length(alpha)
   if (m != ma) {
     if ( ma == 1) {
@@ -79,6 +128,7 @@ feasibleAlpha <- function(m, alpha){
 
 # Check signal length is long enough to avoid computation errors in C code
 feasibleLength <- function(n){
+  stopifnot(is.numeric(n), length(n) == 1)
   if (n < 16) {
     stop("Signal length too small. Need at least 16 observations.")
   }
@@ -88,24 +138,25 @@ feasibleLength <- function(n){
   }
 }
 
-# Check blur identification string 
+# Check resolution method string 
+feasibleMethod <- function(resolution){
+  stopifnot(is.character(resolution), length(resolution) == 1)
+  if (resolution != 'smooth' && resolution != 'block') {
+      stop("unrecognised resolution select method. Please choose 'smooth' or 'block'.")
+  }
+}
+
 feasibleBlur <- function(blur){
-  if (blur != 'direct') {
-    if (blur != 'smooth') {
-      if (blur != 'box.car') {
-        stop("unrecognised blur input. Please choose 'direct', 'smooth' or 'box.car'.")
-      }
-    }
+  stopifnot(is.character(blur), length(blur) == 1)
+  if (blur != 'direct' && blur != 'smooth' && blur != 'box.car') {
+    stop("unrecognised blur method. Please choose blur = 'direct', 'smooth' or 'box.car'.")
   }
 }
 
 feasibleShrinkage <- function(shrinkType){
-  if (shrinkType != 'hard') {
-    if (shrinkType != 'soft') {
-      if (shrinkType != 'garrote') {
-        stop("unrecognised shrinkType input. Please choose 'soft', 'hard' or 'garrote'.")
-      }
-    }
+  stopifnot(is.character(shrinkType), length(shrinkType) == 1)
+  if (shrinkType != 'hard' && shrinkType != 'soft' && shrinkType != 'garrote') {
+    stop("unrecognised shrinkType input. Please choose 'soft', 'hard' or 'garrote'.")
   }
 }
 
@@ -124,12 +175,14 @@ feasibleShrinkage <- function(shrinkType){
 #' library(mwaved)
 #' # Simulate matrix of Gaussian variables with three different noise levels
 #' sig <- c(0.25, 0.5, 1.25)
-#' Y <- sapply(1:3, function(i) sig[i]*rnorm(1024))
+#' n <- 1024
+#' Y <- sapply(1:3, function(i) sig[i]* rnorm(n))
 #' # Estimate the noise levels
 #' multiSigma(Y, deg = 3)
 #'
 #' @export 
 multiSigma <- function(Y, deg = 3L){
+  stopifnot(is.numeric(Y), !is.complex(Y), is.numeric(deg), length(deg) == 1)
   Y <- as.matrix(Y)
   n <- dim(Y)[1]
   feasibleLength(n)
@@ -171,6 +224,7 @@ multiSigma <- function(Y, deg = 3L){
 #' legend("bottomright", legend = c("Signal", paste('j1 =', j)), col = lcols, lty =ltys)
 #' @export
 multiProj <- function(beta, j1 = log2(length(beta$coef)) - 1) {
+  stopifnot(class(beta) == 'waveletCoef')
   coefs <- beta$coef
   j0 <- beta$j0
   deg <- beta$deg
@@ -187,10 +241,10 @@ multiProj <- function(beta, j1 = log2(length(beta$coef)) - 1) {
 #' @inheritParams multiSigma
 #' @param G The input multichannel blur matrix/vector (needs to be the same dimension/length as the signal input which is a matrix or vector for the multichannel or single channel case respectively). This argument dictates the form of blur present in each of the channels.
 #' @param alpha A numeric vector, with m elements, specifying the level of long memory for the noise process within each channel of the form alpha = 2 - 2H, where H is the Hurst parameter. If alpha is a single element, that same element is repeated across all required channels.
-#' @param blur A character string describing which deconvolution regime is to be applied.\itemize{
-#' \item 'direct' (default): No deconvolution required and direct signal observed. This is captured when G is an n by m matrix with all entries being zero except the first row where all elements are one. 
-#' \item 'smooth': Indirect signal observed and the blurring kernel is of regular smooth blur type.
-#' \item 'box.car': Indirect signal observed and the blurring kernel is of box car type.}
+#' @param resolution A character string describing which resolution selection method is to be applied.\itemize{
+#' \item 'smooth': Smooth stopping rule in Fourier domain applied piecewise in each channel and maximum selected which is appropriate if blurring kernel is of regular smooth blur type or direct model (no convolution).
+#' \item 'block': Blockwise variance selection method is used which is appropriate for box car type.}
+#' The default choice uses the detectBlur function to identify what type of blur matrix, G, is input and then maps that identification to the resolution type via a simple switch statement in the hidden \code{resolutionMethod} function, whereby, identified 'smooth' and 'direct' blur use the smooth resolution selection while box.car uses the blockwise resolution selection method. 
 #' @param j0 The coarsest resolution level for the wavelet expansion.
 #' @param j1 The finest resolution level for the wavelet expansion. If unspecified, the function will compute all thresholds up to the maximum possible resolution level at j1 = log2(n) - 1.
 #' @param eta The smoothing parameter. The default level is \eqn{2\sqrt(\alpha^*)} where \eqn{\alpha^*} is an optimal level depending on the type of blur. (see Kulik, Sapatinas and Wishart (2014) for details and justification)
@@ -204,30 +258,31 @@ multiProj <- function(beta, j1 = log2(length(beta$coef)) - 1) {
 #' n <- 2^10
 #' signal <- makeDoppler(n)
 #' # Noise levels per channel
-#' e <- rnorm(m*n)
+#' e <- rnorm(m * n)
 #' # Create Gamma blur
 #' shape <- seq(from = 0.5, to = 1, length = m)
-#' scale <- rep(0.25,m)
+#' scale <- rep(0.25, m)
 #' G <- gammaBlur(n, shape = shape, scale = scale)
 #' # Convolve the signal
 #' X <- blurSignal(signal, G)
 #' # Create error with custom signal to noise ratio
-#' SNR <- c(10,15,20)
+#' SNR <- c(10, 15, 20)
 #' sigma <- sigmaSNR(X, SNR)
 #' alpha <- c(0.75, 0.8, 1)
 #' E <- multiNoise(n, sigma, alpha)
 #' # Create noisy & blurred multichannel signal
 #' Y <- X + E
-#' # Determine thresholds
-#' thresh <- multiThresh(Y, G, blur = 'smooth')
+#' # Determine thresholds blur = 'smooth'
+#' thresh <- multiThresh(Y, G)
 #' 
 #' @return A numeric vector of the resolution level thresholds for the hard-thresholding nonlinear wavelet estimator from the multichannel model.
 #' @references
 #' Kulik, R., Sapatinas, T. and Wishart, J.R. (2014) \emph{Multichannel wavelet deconvolution with long range dependence. Upper bounds on the L_p risk}  Appl. Comput. Harmon. Anal. (to appear in).
 #' \url{http://dx.doi.org/10.1016/j.acha.2014.04.004}
 #' @export
-multiThresh <- function(Y, G = directBlur(dim(as.matrix(Y))), alpha = rep(1,dim(as.matrix(Y))[2]), 
-                        blur = "direct", j0 = 3L, j1 = NA_integer_, eta = NA_real_, deg = 3L) {
+multiThresh <- function(Y, G = directBlur(nrow(as.matrix(Y)), ncol(as.matrix(Y))), alpha = rep(1,dim(as.matrix(Y))[2]), 
+                        resolution = resolutionMethod(detectBlur(G)), j0 = 3L, j1 = NA_integer_, eta = NA_real_, deg = 3L) {
+  stopifnot(!is.complex(Y), !is.complex(G))
   Y <- as.matrix(Y)
   G <- as.matrix(G)
   dimY <- dim(Y)
@@ -237,8 +292,9 @@ multiThresh <- function(Y, G = directBlur(dim(as.matrix(Y))), alpha = rep(1,dim(
   feasibleLength(dimY[1])
   jvals <- feasibleResolutions(dimY[1], j0, j1)
   alpha <- feasibleAlpha(dimY[2], alpha)
-  feasibleBlur(blur)
-  .Call('mwaved_multiThresh', Y, G, alpha, blur, jvals$j0, jvals$j1, eta, deg)
+  feasibleMethod(resolution)
+  blurCheck(G, resolution)
+  .Call('mwaved_multiThresh', Y, G, alpha, resolution, jvals$j0, jvals$j1, eta, deg)
 }
 
 #' @title Wavelet coefficient estimation from a multichannel signal
@@ -246,7 +302,6 @@ multiThresh <- function(Y, G = directBlur(dim(as.matrix(Y))), alpha = rep(1,dim(
 #' @description Estimates the wavelet coefficients for the underlying signal of interest embedded in the noisy multichannel deconvolution model. 
 #' 
 #' @inheritParams multiThresh
-#' @param thresh A numeric vector of resolution level thresholds to use in the wavelet thresholded estimator of the true signal. It should have enough elements to construct the required expansion with all resolutions. That is, have \code{j1} - \code{j0} + 2 elements. If a single element is input, it is repeated to be the universal threshold across all resolutions.
 #' 
 #' @details Returns an object of type \emph{waveletCoef} which is a list including the following three objects \itemize{
 #' \item \code{coef} a numeric vector of size n giving the estimated wavelet coefficients for the signal of interest
@@ -280,18 +335,17 @@ multiThresh <- function(Y, G = directBlur(dim(as.matrix(Y))), alpha = rep(1,dim(
 #' # Create noisy & blurred multichannel signal
 #' Y <- X + E
 #' plot(signal, type='l', lty='dashed', main='dashed: True signal, solid: multichannel signals')
-#' matlines(Y)
+#' matlines(Y, lty = 1)
 #' # Estimate the wavelet coefficients
-#' estimatedCoefs <- multiCoef(Y, G, alpha = alpha, blur = 'smooth')
+#' estimatedCoefs <- multiCoef(Y, G, alpha = alpha)
 #' plot(estimatedCoefs)
 #' # Compute true wavelet coefficients
 #' trueCoefs <- multiCoef(signal)
 #' plot(trueCoefs)
 #' @export
-multiCoef <- function(Y, G = directBlur(dim(as.matrix(Y))), alpha = rep(1,dim(as.matrix(Y))[2]),
-                      blur = "direct", j0 = 3L, j1 = NA_integer_, thresh = multiThresh(as.matrix(Y),
-                      G = G, alpha = alpha, blur = blur, j0 = j0, j1 = j1, eta = eta, deg = 3L), 
-                      eta = NA_real_, deg = 3L) {
+multiCoef <- function(Y, G = directBlur(nrow(as.matrix(Y)), ncol(as.matrix(Y))), alpha = rep(1,dim(as.matrix(Y))[2]),
+                      resolution = resolutionMethod(detectBlur(G)), j0 = 3L, j1 = NA_integer_, eta = NA_real_, deg = 3L) {
+  stopifnot(!is.complex(Y), !is.complex(G))
   Y <- as.matrix(Y)
   G <- as.matrix(G)
   dimY <- dim(Y)
@@ -302,10 +356,11 @@ multiCoef <- function(Y, G = directBlur(dim(as.matrix(Y))), alpha = rep(1,dim(as
   jvals <- feasibleResolutions(dimY[1], j0, j1)
   alpha <- feasibleAlpha(dimY[2], alpha)
   
-  blur <- tolower(blur)
-  feasibleBlur(blur)
+  resolution <- tolower(resolution)
+  feasibleMethod(resolution)
+  blurCheck(G, resolution)
   # Pass to C code
-  .Call('mwaved_multiCoef', Y, G, alpha, jvals$j0, jvals$j1, thresh, deg)
+  .Call('mwaved_multiCoef', Y, G, alpha, jvals$j0, jvals$j1, deg)
 }
 
 #' @title Apply thresholding regime to a set of wavelet coefficients
@@ -360,39 +415,33 @@ multiCoef <- function(Y, G = directBlur(dim(as.matrix(Y))), alpha = rep(1,dim(as
 #' # Create noisy & blurred multichannel signal
 #' Y <- X + E
 #' # Determine thresholds
-#' thresh <- multiThresh(Y, G, blur = 'smooth')
+#' thresh <- multiThresh(Y, G) 
 #' beta <- multiCoef(Y, G)
 #' betaShrunk <- waveletThresh(beta, thresh)
 #' plot(beta, betaShrunk)
 #' @export 
-waveletThresh <- function(beta, thresh = 0, shrinkType = 'hard'){
-  if (class(beta) != "waveletCoef") {
-    stop('beta needs to be a waveletCoef object.')
-  }
+waveletThresh <- function(beta, thresh, shrinkType = 'hard'){
+  stopifnot(class(beta) == "waveletCoef", is.numeric(thresh), all(thresh > 0))
   nthr <- length(thresh)
-  
   req <- log2(length(beta$coef)) - beta$j0
-  j1 <- beta$j0j0 + req
+  j1 <- beta$j0 + req
   # convert to lower case to avoid trivial issues
   shrinkType <- tolower(shrinkType)
   feasibleShrinkage(shrinkType)
-  if (any(thresh < 0)) {
-    stop("Input thresholds must all be non-negative.")
+
+  if (nthr == 1 && req > 0) {
+    warning("thresh input vector only has one element. Universal threshold applied on all resolutions.")
+    thresh <- rep(thresh, req)
+    nthr <- length(thresh)
   }
   
-  if (nthr == 1 ) {
-    if (thresh == 0) {
-      thresh <- rep(0, req)  
-    } else {
-      warning("thresh input vector only has one element. Universal threshold applied on all resolutions.")
-      thresh <- rep(thresh, req)
-    }
-    
-  }
-  
-  if (nthr < req ){
+  if (nthr < req) {
     warning("Thresh input length too small, last element repeated in higher resolutions.")
     thresh <- c(thresh, rep(thresh[nthr], req - nthr))
+  }
+  if (nthr > req) {
+    warning("Thresh input length too long, higher threshold elements ignored.")
+    thresh <- thresh[1:req]
   }
   return(.Call('mwaved_waveletThresh', beta$coef, thresh, shrinkType, beta$j0, beta$deg))
 }
@@ -402,6 +451,7 @@ waveletThresh <- function(beta, thresh = 0, shrinkType = 'hard'){
 #' 
 #' @description Returns a mWaveD object that contains all the required information for the multichannel analysis.
 #' @inheritParams multiCoef
+#' @param thresh A numeric vector of resolution level thresholds to use in the wavelet thresholded estimator of the true signal. It should have enough elements to construct the required expansion with all resolutions. That is, have \code{j1} - \code{j0} + 2 elements. If a single element is input, it is repeated to be the universal threshold across all resolutions.
 #' @param shrinkType A character string that specifies which thresholding regime to use. 
 #' Available choices are the 'hard', 'soft' or 'garrote'.
 #' @examples
@@ -430,16 +480,17 @@ waveletThresh <- function(beta, thresh = 0, shrinkType = 'hard'){
 #' # Create noisy & blurred multichannel signal
 #' Y <- X + E
 #' # Compute mWaveD object
-#' mWaveDObj <- multiWaveD(Y, G = G, alpha = alpha, blur = 'smooth')
+#' mWaveDObj <- multiWaveD(Y, G = G, alpha = alpha)
 #' plot(mWaveDObj)
 #' summary(mWaveDObj)
 #' 
 #' @seealso \code{\link{plot.mWaveD}} and \code{\link{summary.mWaveD}}
 #' 
 #' @export
-multiWaveD <- function(Y, G = directBlur(dim(as.matrix(Y))), alpha = rep(1,dim(as.matrix(Y))[2]),
-                       j0 = 3L, j1 = NA_integer_, blur = "direct", thresh = as.numeric(c()), 
-                       eta = NA_real_, shrinkType = "hard", deg = 3L) {
+multiWaveD <- function(Y, G = directBlur(nrow(as.matrix(Y)), ncol(as.matrix(Y))), alpha = rep(1,dim(as.matrix(Y))[2]),
+                       j0 = 3L, j1 = NA_integer_, resolution = resolutionMethod(detectBlur(G)), eta = NA_real_,
+                       thresh = as.numeric(c()), shrinkType = "hard", deg = 3L) {
+  stopifnot(!is.complex(Y), !is.complex(G))
   Y <- as.matrix(Y)
   G <- as.matrix(G)
   dimY <- dim(Y)
@@ -449,12 +500,13 @@ multiWaveD <- function(Y, G = directBlur(dim(as.matrix(Y))), alpha = rep(1,dim(a
   feasibleLength(dimY[1])
   jvals <- feasibleResolutions(dimY[1], j0, j1)
   alpha <- feasibleAlpha(dimY[2], alpha)
-  blur <- tolower(blur)
-  feasibleBlur(blur)
+  resolution <- tolower(resolution)
+  feasibleMethod(resolution)
+  blur = blurCheck(G, resolution)
   shrinkType <- tolower(shrinkType)
   feasibleShrinkage(shrinkType)
   # Pass to C code
-  return(.Call('mwaved_multiWaveD', Y, G, alpha, jvals$j0, jvals$j1, blur, thresh, eta, shrinkType, deg))
+  return(.Call('mwaved_multiWaveD', Y, G, alpha, resolution, blur, jvals$j0, jvals$j1, eta, thresh, shrinkType, deg))
 }
 
 #' @title Wavelet deconvolution signal estimate from the noisy multichannel convoluted signal
@@ -463,7 +515,6 @@ multiWaveD <- function(Y, G = directBlur(dim(as.matrix(Y))), alpha = rep(1,dim(a
 #' 
 #' @inheritParams multiWaveD
 #' @param sigma A numeric vector with m elements that specifies the level of noise (standard deviation) in each channel. The default method uses the Median Absolute Deviation of wavelet coefficients in the finest resolution (see \code{\link{multiSigma}}) for details.
-#' 
 #' @details Function requires input of a noisy multichannel signal matrix, Y, which contains the information for each channel in each of the m columns. Optional inputs are a matrix, G, the same dimension as Y, that gives the multichannel blur information.
 #' 
 #' @return A numeric vector of the estimate of the underlying signal of interest.
@@ -495,7 +546,7 @@ multiWaveD <- function(Y, G = directBlur(dim(as.matrix(Y))), alpha = rep(1,dim(a
 #' # Create noisy & blurred multichannel signal
 #' Y <- X + E
 #' # Estimate the underlying doppler signal
-#' dopplerEstimate <- multiEstimate(Y, G = G, alpha = rep(1, m), blur = 'smooth')
+#' dopplerEstimate <- multiEstimate(Y, G = G, alpha = rep(1, m))
 #' # Plot the result and compare with truth
 #' par(mfrow=c(2, 1))
 #' matplot(x, Y, type = 'l', main = 'Noisy multichannel signal')
@@ -503,10 +554,11 @@ multiWaveD <- function(Y, G = directBlur(dim(as.matrix(Y))), alpha = rep(1,dim(a
 #' lines(x, dopplerEstimate)
 #' 
 #' @export
-multiEstimate <- function(Y, G = directBlur(dim(as.matrix(Y))), alpha = rep(1,dim(as.matrix(Y))[2]), 
-                          blur = "direct", sigma = as.numeric(c()), j0 = 3L, j1 = NA_integer_, 
+multiEstimate <- function(Y, G = directBlur(nrow(as.matrix(Y)), ncol(as.matrix(Y))), alpha = rep(1,dim(as.matrix(Y))[2]), 
+                          resolution = resolutionMethod(detectBlur(G)), sigma = as.numeric(c()), j0 = 3L, j1 = NA_integer_, 
                           eta = NA_real_, thresh = multiThresh(as.matrix(Y), G = G, alpha = alpha,
-                                                               blur = blur, j0 = j0, j1 = j1, eta = eta, deg = 3L) , shrinkType = "hard", deg = 3L) {
+                          j0 = j0, j1 = j1, eta = eta, deg = 3L) , shrinkType = "hard", deg = 3L) {
+  stopifnot(!is.complex(Y), !is.complex(G))
   Y <- as.matrix(Y)
   G <- as.matrix(G)
   dimY <- dim(Y)
@@ -516,10 +568,37 @@ multiEstimate <- function(Y, G = directBlur(dim(as.matrix(Y))), alpha = rep(1,di
   feasibleLength(dimY[1])
   jvals <- feasibleResolutions(dimY[1], j0, j1)
   alpha <- feasibleAlpha(dimY[2], alpha)
-  blur <- tolower(blur)
-  feasibleBlur(blur)
+  resolution <- tolower(resolution)
+  feasibleMethod(resolution)
+  blur <- blurCheck(G, resolution)
   shrinkType <- tolower(shrinkType)
   feasibleShrinkage(shrinkType)
   # Pass to C code
-  .Call('mwaved_multiEstimate', Y, G, alpha, blur, sigma, j0, j1, eta, thresh, shrinkType, deg)
+  .Call('mwaved_multiEstimate', Y, G, alpha, resolution, blur, sigma, jvals$j0, jvals$j1, eta, thresh, shrinkType, deg)
+}
+
+#' @title Find optimal theoretical Eta
+#' 
+#' @description Finds the optimal theoretical smoothing paramter for the thresholding
+#' @details The theory (see Kulik, Sapatinas and Wishart (2014)) suggests that the optimal smoothing parameter depends on the best channel in the smooth blur case while depends on the level of dependence in the box.car blur case. This function finds the theoretically best eta from the data suggested by the theory in that paper.
+#' @inheritParams resolutionMethod
+#' @param alpha A numeric vector, with m elements, specifying the level of long memory for the noise process within each channel of the form alpha = 2 - 2H, where H is the Hurst parameter. If alpha is a single element, that same element is repeated across all required channels.
+#' @param G The input blur matrix
+#' @param sigma A numeric vector with m elements that specifies the level of noise (standard deviation) in each channel. The default method uses the Median Absolute Deviation of wavelet coefficients in the finest resolution (see \code{\link{multiSigma}}) for details.
+#' 
+#' @return The theoretical eta (smoothing parameter) to be used in the thresholding.
+#' 
+#' @references
+#' Kulik, R., Sapatinas, T. and Wishart, J.R. (2014) \emph{Multichannel wavelet deconvolution with long range dependence. Upper bounds on the L_p risk}  Appl. Comput. Harmon. Anal. (to appear in).
+#' \url{http://dx.doi.org/10.1016/j.acha.2014.04.004}
+#' @export
+theoreticalEta <- function(alpha, blur, G, sigma) {
+  feasibleBlur(blur)
+  if (blur == 'box.car') {
+    eta = 4 * sqrt(min(alpha))
+  } else {
+    G <- as.matrix(G)
+    eta <- .Call('mwaved_theoreticalEta', alpha, blur, mvfft(G), sigma)
+  }
+  eta
 }

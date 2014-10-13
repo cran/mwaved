@@ -37,38 +37,38 @@
 #' @export
 summary.mWaveD <- function(object, ...){
   n <- length(object$estimate)
-  
+  m <- dim(object$signal)[2]
   cat("Degree of Meyer wavelet =", object$degree, "  , Coarse resolution level j0 =", object$j0)
   cat("\n")
   cat("Sample size per channel = ", n, ", Maximum possible resolution level = ", log2(n) - 1, ".", sep = '')
   cat("\n\n")
-  cat("Number of channels: m =", object$channels,"\n")
-  cat('Blur type: ',object$blurType,'\n\n')
+  cat("Number of channels: m =", m,"\n")
+  cat('Detected Blur Type:',detectBlur(object$G), '\n\n')
+  cat('Resolution selection method: ',object$resolution,'\n\n')
   cat("Estimated Channel information:\n\n")
   
-  if (object$blurType == "direct") {
-    mat <- cbind(round(object$sigma, 3), round(object$alpha, 3), object$blurInfo$freq, rep(object$j1, object$channels))
-    colnames(mat) <- c("Sigma.hat", "Alpha", "Fourier freq cutoff", "Highest resolution")
-    rownames(mat) <- paste("Channel ", 1:object$channels,':', sep='')
+  if (object$blurDetected == "direct" && object$resolution == "smooth") {
+    mat <- cbind(round(object$sigma, 3), round(object$alpha, 3), object$blurInfo$freq, rep(object$j1, m))
+    colnames(mat) <- c("Sigma.hat", "Alpha", "Fourier number cutoff", "Highest resolution")
+    rownames(mat) <- paste("Channel ", 1:m,':', sep='')
     print(mat, ...)
   } else {
     # If Smooth blur is used, display the matrix of values
-    if (object$blurType == "smooth"){
+    if (object$resolution == "smooth"){
       mat <- cbind(round(object$sigma, 3), round(object$alpha, 3), object$blurInfo$freq, object$blurInfo$maxLevels)
-      colnames(mat) <- c("Sigma.hat", "Alpha", "Fourier freq cutoff", "Highest resolution")
-      rownames(mat) <- paste("Channel ", 1:object$channels,':', sep='')
+      colnames(mat) <- c("Sigma.hat", "Alpha", "Fourier number cutoff", "Highest resolution")
+      rownames(mat) <- paste("Channel ", 1:m,':', sep='')
       print(mat, ...)
       cat("\n")
-      cat("Estimated best channel = Channel", object$blurInfo$bestChannel)
-      
+      cat("Estimated best channel = Channel", object$blurInfo$bestChannel)      
     } else {
-      if (object$blurType == "box.car"){
+      if (object$resolution == "block"){
         mat <- cbind(round(object$sigma, 3), round(object$alpha, 3))
         colnames(mat) <- c("Sigma.hat", "Alpha")
-        rownames(mat) <- paste("Channel ", 1:object$channels,':', sep='')
+        rownames(mat) <- paste("Channel ", 1:m,':', sep='')
         print(mat, ...)
       } else {
-        warning('Unrecognised blur.type')
+        warning('Unrecognised resolution selection method.')
       }
     } 
   }
@@ -102,31 +102,30 @@ summary.mWaveD <- function(object, ...){
 #' 
 #' @export
 plot.waveletCoef <- function(x, y = NULL, labels = NULL,  ..., lowest = NULL, highest = NULL, scaling = 1, ggplot = TRUE){
+  stopifnot(class(x) == "waveletCoef")
   if (!is.null(y) && class(y) != "waveletCoef") {
-    stop('y argument must be a waveletCoef object')
+    stop('y must be a waveletCoef object')
   }
-  
-  J <- floor(log2(length(x$coef)))
+  n <- length(x$coef)
+  J <- floor(log2(n))
   fine <- ceiling(J) - 1
   # Check resolution ranges
   if (is.null(lowest)) {
     lowest <- x$j0
-  } else {
-    # Catch lowest level too low
-    if (lowest > x$j0 )
+  } else if (lowest < x$j0 ) {
       warning("lowest level shouldn't be smaller than j0 specified in wavelet coefficient object.")
   }
+  
+  # Check resolution levels aren't empty.
+  ind <- which.max(rev(x$coef) != 0)
+  lastres <- floor(log2(n - ind + 1)) - 1
   if (is.null(highest)) {
-    highest <- fine
-  } else {
-    if (highest > fine) {
+    highest <- lastres
+  } else if (highest > fine) {
       warning(paste('highest level too high. Resetting highest level to the maximum at j1 = ', fine))
-    } else {
-      if (highest < lowest) {
-        warning('highest level must be higher than the lowest level.')
-        highest <- lowest
-      }
-    }
+  } else if (highest < lowest) {
+      warning('highest level must be higher than the lowest level.')
+      highest <- lowest
   }
   
   js <- rep(lowest:highest, 2^(lowest:highest))
@@ -158,7 +157,7 @@ plot.waveletCoef <- function(x, y = NULL, labels = NULL,  ..., lowest = NULL, hi
     ns <- 1
   }
   
-  mraTitle <- 'Multiresolution Analysis of Coef.'
+  mraTitle <- 'MRA'
   mraLabels <- c("Location", "Resolution Level")
   if (!is.null(labels)) {
     if (length(labels) != ns) {
@@ -172,14 +171,14 @@ plot.waveletCoef <- function(x, y = NULL, labels = NULL,  ..., lowest = NULL, hi
   if (ggplot && require(ggplot2)) {
     if (ns == 2) {
       nData <- data.frame(w = c(ws,wss), js = c(js, jss), ks = c(ks, kss), col = rep(labels, c(nw, nss)))
-      mraPlot <- ggplot(nData) + geom_segment(aes(x = ks, xend = ks, y = js, yend = w, colour = col, size = col)) + labs(x = mraLabels[1], y = mraLabels[2]) + scale_size_discrete(range = c(1, 2))
+      mraPlot <- ggplot2::ggplot(nData) + ggplot2::geom_segment(ggplot2::aes(x = ks, xend = ks, y = js, yend = w, colour = col, size = col)) + ggplot2::labs(x = mraLabels[1], y = mraLabels[2]) + ggplot2::scale_size_discrete(range = c(1, 2))
       # Fix legend
-      mraPlot <- mraPlot + theme(legend.position = "top", axis.text.y = element_text(angle = 90)) + guides(colour = guide_legend(title = mraTitle), size = guide_legend(title = mraTitle))
+      mraPlot <- mraPlot + ggplot2::theme(legend.position = "top", axis.text.y = ggplot2::element_text(angle = 90)) + ggplot2::guides(colour = ggplot2::guide_legend(title = mraTitle), size = ggplot2::guide_legend(title = mraTitle))
     } else {
       nData <- data.frame(w = ws, js = js, ks = ks)
-      mraPlot <- ggplot(nData) + geom_segment(aes(x = ks, xend = ks, y = js, yend = w), colour = 'red') + ggtitle(mraTitle)
+      mraPlot <- ggplot2::ggplot(nData) + ggplot2::geom_segment(ggplot2::aes(x = ks, xend = ks, y = js, yend = w), colour = 'red') + ggplot2::ggtitle(mraTitle)
     }
-    mraPlot + labs(x = mraLabels[1], y = mraLabels[2]) + scale_y_continuous(breaks = lowest:highest) 
+    mraPlot + ggplot2::labs(x = mraLabels[1], y = mraLabels[2]) + ggplot2::scale_y_continuous(breaks = lowest:highest) 
   } else {
     buf <- 0.5
     plot(0, type = "n", xlim = c(0,1), ylim = c(lowest - buf, highest + buf), yaxt = 'n', xlab = mraLabels[1], ylab = mraLabels[2], main = mraTitle)
@@ -207,7 +206,7 @@ plot.waveletCoef <- function(x, y = NULL, labels = NULL,  ..., lowest = NULL, hi
 #' @param ... Arguments to be passed to methods.
 #' @param which A numeric vector that specifies which plots to output. Default value is \code{1:4} which  specifies that all four plots are to be displayed.
 #' @param ask A logical value that specifies whether the user is \emph{ask}ed before each plot output.
-#' @param singlePlot A logical value that controls whether all plots should appear on a single window. The plot window is resized depending the value of \code{which}.
+#' @param singlePlot A logical value that controls whether all plots should appear on a single window. The plot window is resized depending on the value of \code{which}.
 #' @param ggplot A logical value to specify if the user wants to use base graphics (FALSE) or ggplot2 graphics (TRUE).
 #' 
 #' @details Four plots are output that summarise the multichannel input, a visualisation of the characteristics of the channels and the output estimate and a multi-resolution analysis plot.\itemize{
@@ -238,18 +237,13 @@ plot.mWaveD <- function(x, ..., which = 1L:4L, singlePlot = TRUE, ask = !singleP
       hsize <- 1
       lsize <- 0.5
       asize <- 0.5
-      library(ggplot2)
       # Initialise list
       ggList <- list(NULL)
       i <- 1
     } 
-    if (singlePlot) {
-      if (gridExtraAvailable) {
-        library(gridExtra)
-      } else {
-        warning('gridExtra package required to create ggplot2 graphics in same window. Setting output to separate windows.')
-        singlePlot <- FALSE
-      }
+    if (singlePlot && !gridExtraAvailable) {
+      warning('gridExtra package required to create ggplot2 graphics in same window. Setting output to separate windows.')
+      singlePlot <- FALSE
     }
   } else {
     ggAvailable <- FALSE
@@ -270,44 +264,39 @@ plot.mWaveD <- function(x, ..., which = 1L:4L, singlePlot = TRUE, ask = !singleP
   
   n  <- length(x$estimate)
   n2 <- n/2
-  m  <- x$channels
+  m  <- dim(x$signal)[2]
   t  <- (1:n)/n
   
   blurInfo <- x$blurInfo
-  blurType <- x$blurType
+  resolution <- x$resolution
   j0 <- x$j0
   j1 <- x$j1
   
   estimateTitle <- 'mWaveD estimate'
   signalTitle <- 'Input Signal'
-  fourierLabel <- 'Fourier freq'
-  fourierTitle <- 'Kernel decay in Fourier domain'
+  fourierLabel <- 'Fourier number'
+  fourierTitle <- 'Kernel decay'
   blockTitle <- 'Block wise resolution selection'
   mraLabels <- c('raw',paste(x$shrinkType, ' thresholded', sep = ''))
   mraTitle <- 'Multiresolution Analysis'
   
   if (show[3L]) {
-    if (blurType != "box.car") {
-      blurf <- blurInfo$decay
-      cutf <- blurInfo$cutoff
-      ymin <- min(cutf)
-      revblur <- as.matrix(blurf[n2:2, ])
-      revcut <- as.matrix(cutf[n2:2, ])
-      iw = -(n2 - 1):n2
-      blur <- rbind(revblur, blurf)
-      cut <- rbind(revcut, cutf)
-      ylim <- c(min(cutf[2, ]), 0)
-      if (blurType == 'smooth') {
-        xbest <- max(blurInfo$freqCutoffs) - 1
-        ybest <- blurf[xbest, blurInfo$bestChannel]
-        xlim <- min(2*max(blurInfo$freqCutoff), n/2)
-        xlim <- c(-xlim, xlim)
-      } else {
+    if (resolution != "block") {
+      xw = fourierWindow(n)
+      blur <- mirrorSpec(blurInfo$decay)
+      cut <- mirrorSpec(blurInfo$cutoff)
+      ylim <- c(min(blurInfo$cutoff[2, ]), 0)
+      if (x$blurDetected == 'direct') {
         xlim = c(-n2, n2)
+      } else {
+        xbest <- max(blurInfo$freqCutoffs) - 1
+        ybest <- cut[n/2 + xbest, blurInfo$bestChannel]
+        xlim <- min(2*max(blurInfo$freqCutoffs), n/2)
+        xlim <- c(-xlim, xlim)
       }
     } else {
       J    <- floor(log2(n)) - 1
-      j    <- j0:min(c(J - 1, 2 * j1))
+      j    <- j0:min(c(J, 2 * j1))
       blkV <- blurInfo$blockVar[1:length(j)]
       blkc <- blurInfo$blockCutoff[1:length(j)]
       ylim <- range(c(blurInfo$blockVar, blurInfo$blockCutoff))
@@ -315,38 +304,39 @@ plot.mWaveD <- function(x, ..., which = 1L:4L, singlePlot = TRUE, ask = !singleP
   }
   if (show[1L] && ggAvailable) {
     signalData <- data.frame(Y = as.vector(x$signal), x = rep(t, m), Channel = rep(LETTERS[1:m], each = n))
-    signalPlot <- ggplot(signalData, aes_string(x = 'x', y = 'Y', colour = 'Channel')) + geom_line(size = lsize, alpha = asize) + ggtitle(signalTitle) + labs(x = '', y = '')
+    signalPlot <- ggplot2::ggplot(signalData, ggplot2::aes_string(x = 'x', y = 'Y', colour = 'Channel')) + ggplot2::geom_line(size = lsize, alpha = asize) + ggplot2::ggtitle(signalTitle) + ggplot2::labs(x = '', y = '')
     ggList[[i]] <- signalPlot
     i <- i + 1
   }
   if (show[2L] && ggAvailable) {
     estimateData <- data.frame(Y = as.vector(x$estimate), x = t)
-    estimatePlot <- ggplot(estimateData, aes_string(x = 'x', y = 'Y')) + geom_line(size = lsize, alpha = asize) + ggtitle(estimateTitle) + labs(x = '', y = '')
+    estimatePlot <- ggplot2::ggplot(estimateData, ggplot2::aes_string(x = 'x', y = 'Y')) + ggplot2::geom_line(size = lsize, alpha = asize) + ggplot2::ggtitle(estimateTitle) + ggplot2::labs(x = '', y = '')
     ggList[[i]] <- estimatePlot
     i <- i + 1
   }
   if (show[3L] && ggAvailable) {
-    if (blurType != 'box.car') {
-      fourierData <- data.frame(Y = as.vector(blur), x = rep(iw,m), Ycut = as.vector(cut), Channel=rep(LETTERS[1:m],each=n),m=m)
-      resolutionPlot <- ggplot(fourierData) + geom_line(aes_string(x = 'x', y = 'Y', colour = 'Channel', group = 'Channel'),size = 1) + geom_line(aes_string(x = 'x', y = 'Ycut', colour = 'Channel'), linetype='dashed', size = 1) + ggtitle(fourierTitle) + labs(x = fourierLabel, y = '')
-      if (blurType == 'smooth') {
-        highlightData <- data.frame(x = rep(xbest, 2), y = c(-Inf, ybest))
-        pointData <- data.frame(xbest = xbest, ybest = ybest)
-        resolutionPlot <- resolutionPlot + geom_line(aes_string(x = 'x', y = 'y'), linetype = 'dotted' , data = highlightData) + geom_line(aes_string(x = 'x', y = 'y'), linetype = 'dotted' , data = data.frame(x = rep(-xbest + 1, 2), y = c(-Inf, ybest))) + geom_point( aes_string(x = 'xbest', y = 'ybest'), size = 4, shape = 1, data = pointData) + geom_point( aes_string(x = 'x', y = 'y'), size = 4, shape = 1, data = data.frame(x = -xbest + 1, y = ybest)) + coord_cartesian(xlim = xlim)
+    if (resolution != 'block') {
+      fourierData <- data.frame(Y = as.vector(blur), x = rep(xw,m), Ycut = as.vector(cut), Channel=rep(LETTERS[1:m],each=n), m = m)
+      resolutionPlot <- ggplot2::ggplot(fourierData) + ggplot2::geom_line(ggplot2::aes_string(x = 'x', y = 'Y', colour = 'Channel', group = 'Channel'),size = 1) + ggplot2::geom_line(ggplot2::aes_string(x = 'x', y = 'Ycut', colour = 'Channel'), linetype='dashed', size = 1) + ggplot2::ggtitle(fourierTitle) + ggplot2::labs(x = fourierLabel, y = '') + ggplot2::coord_cartesian(xlim = xlim)
+      if (resolution == 'smooth' && x$blurDetected != 'direct') {
+        rightLine <- ggplot2::geom_line(ggplot2::aes_string(x = 'x', y = 'y'), linetype = 'dotted', data = data.frame(x = rep(xbest,2), y = c(ybest, -Inf)))
+        leftLine <- ggplot2::geom_line(ggplot2::aes_string(x = 'x', y = 'y'), linetype = 'dotted', data = data.frame(x = rep(-xbest,2), y = c(ybest, -Inf)))
+        pointDots <- ggplot2::geom_point(ggplot2::aes_string(x = 'xbest', y = 'ybest'), shape = 1, size = 4, data = data.frame(xbest = c(-xbest, xbest), ybest = rep(ybest, 2)))
+        resolutionPlot <- resolutionPlot + leftLine + rightLine + pointDots
       }
     } else {
       resolutionData <- data.frame(Y = c(blkV, blkc), x = rep(j,2), colour = rep(c("Resolution var.",'Resolution bounds'), each = length(j)) , Ycut = blkc)
       bestV <- blkV[j == j1]
       highlightData <- data.frame(x = c(j1, j1), y = c(ylim[1], bestV))
       pointData <- data.frame(j1 = j1, bestV = bestV)
-      resolutionPlot <- ggplot(resolutionData) + geom_line(aes_string(x = 'x', y = 'Y', colour = 'colour', linetype = 'colour'), size = hsize) +  geom_line(aes_string(x = 'x', y = 'y'), linetype = 'dotted', data = highlightData) + labs(x = 'j', y = '') + geom_point( aes_string(x = 'j1', y = 'bestV'), size = 4, shape = 1, data = pointData)  + scale_color_discrete(labels= c('Resolution bounds', 'Resolution var.'), guide=guide_legend(title.position='left',title.theme = element_text(size=15,angle=0))) + scale_size(guide='none') + guides(colour = guide_legend( title='Blockwise resolution decay')) + theme(legend.position="top", legend.key = element_rect(fill = NA), axis.text.y = element_text(angle = 90)) + scale_linetype_manual(values=c(1,2), name="Blockwise resolution decay", labels=c('Resolution bounds', 'Resolution var.')) + scale_x_continuous(breaks = j)
+      resolutionPlot <- ggplot2::ggplot(resolutionData) + ggplot2::geom_line(ggplot2::aes_string(x = 'x', y = 'Y', colour = 'colour', linetype = 'colour'), size = hsize) +  ggplot2::geom_line(ggplot2::aes_string(x = 'x', y = 'y'), linetype = 'dotted', data = highlightData) + ggplot2::labs(x = 'j', y = '') + ggplot2::geom_point( ggplot2::aes_string(x = 'j1', y = 'bestV'), size = 4, shape = 1, data = pointData)  + ggplot2::scale_color_discrete(labels= c('Resolution bounds', 'Resolution var.'), guide=ggplot2::guide_legend(title.position='left',title.theme = ggplot2::element_text(size=15,angle=0))) + ggplot2::scale_size(guide='none') + ggplot2::guides(colour = ggplot2::guide_legend( title='Blockwise resolution decay')) + ggplot2::theme(legend.position="top", legend.key = ggplot2::element_rect(fill = NA), axis.text.y = ggplot2::element_text(angle = 90)) + ggplot2::scale_linetype_manual(values=c(1,2), name="Blockwise resolution decay", labels=c('Resolution bounds', 'Resolution var.')) + ggplot2::scale_x_continuous(breaks = j)
     }
     ggList[[i]] <- resolutionPlot
     i <- i + 1
   }
   
   if (show[4L] && ggAvailable) {
-      mraPlot <- plot(x$coef, x$shrinkCoef, highest = j1, labels = c('Raw', paste(x$shrinkType, ' Thresholding', sep = '')), ggplot = TRUE)
+      mraPlot <- plot(x$coef, x$shrinkCoef, highest = j1, labels = c('Raw', paste('Thresholded (', x$shrinkType, ')', sep = '')), ggplot = TRUE)
       ggList[[i]] <- mraPlot
   }
 
@@ -358,7 +348,7 @@ plot.mWaveD <- function(x, ..., which = 1L:4L, singlePlot = TRUE, ask = !singleP
   if (ggAvailable) {
     # Plot them
     if (singlePlot == TRUE) {
-      do.call(grid.arrange, ggList)  
+      do.call(gridExtra::grid.arrange, ggList)  
     } else {
       if (show[1L]) {
         print(signalPlot)
@@ -391,19 +381,20 @@ plot.mWaveD <- function(x, ..., which = 1L:4L, singlePlot = TRUE, ask = !singleP
 
     if (show[2L]) {
       # Plot mWaveD estimate
-      plot(t, x$estimate, type = 'l', main = estimateTitle, ylab = '', xlab = '')
+      plot(t, x$estimate, type = 'l', main = estimateTitle, ylab = '', xlab = '', ...)
       grid()
     }
 
     if (show[3L]) {
       # Plot resolution analysis
-      if (blurType != 'box.car') {
+      if (resolution != 'block') {
+        iw = fourierWindow(n)
         matplot(iw, blur, type = 'l', lty = 1, xlim = xlim, ylim = ylim, main = fourierTitle, xlab = fourierLabel, ylab = "")
         matlines(iw, cut, lty = 2)
         grid()      
-        if (blurType == 'smooth') {
+        if (resolution == 'smooth' && x$blurDetected != "direct") {
           points(xbest, ybest, col='blue')
-          points(-xbest + 1, ybest, col = 'blue')
+          points(-xbest, ybest, col = 'blue')
           xbest <- rep(xbest, 2)
           ybest <- c(ylim[1], ybest)
           lines(xbest, ybest, lty = 'dotted')
@@ -411,10 +402,13 @@ plot.mWaveD <- function(x, ..., which = 1L:4L, singlePlot = TRUE, ask = !singleP
         }
       } else {
   #       showPrompt(ask)
-        plot(j, blkV, type = 'b', xlab = 'j', ylab = '', main = blockTitle)
+        rang = range(as.vector(c(blkV, blkc)))
+        buf = 0.1 * diff(rang)
+        ylims = c(rang[1] - buf, rang[2] + buf)
+        plot(j, blkV, type = 'b', xlab = 'j', ylab = '', main = blockTitle, ylim = ylims)
         lines(j, blkc, col = 2)
         points(j1, blurInfo$blockVar[j == j1], col='blue')
-        lines(c(j1, j1), c(ylim[1], blurInfo$blockVar[j == j1]), lty = 'dashed')
+        lines(c(j1, j1), c(ylims[1], blurInfo$blockVar[j == j1]), lty = 'dashed')
         grid()
       }
     }
@@ -423,6 +417,25 @@ plot.mWaveD <- function(x, ..., which = 1L:4L, singlePlot = TRUE, ask = !singleP
       plot(x$coef, x$shrinkCoef, highest = j1, ..., ggplot = FALSE)
     }
   }
+}
+
+# Auxiliary function to obtain domain for plot as a func of Fourier freq
+mirrorSpec <- function(x) {
+  if (is.matrix(x)){
+    n <- dim(x)[1]
+    x <- rbind(as.matrix(x[(n-1):2, ]), x)
+  } else {
+    n <- length(x)
+    x <- c(x[(n-1):2], x)
+  }
+  x
+}
+
+# Auxiliary function to obtain domain for plot as a func of Fourier freq
+fourierWindow <- function(n) {
+  n2 <- floor(n/2)
+  iw = -(n2 - 1):n2
+  iw
 }
 
 #' @name mWaveDDemo
