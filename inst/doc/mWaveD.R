@@ -92,7 +92,6 @@ plot(x, Doppler, type = 'l')
 ## ----plot-simulation, echo = FALSE, results='hide', message = FALSE, fig.show='hold'----
 library(mwaved)
 library(ggplot2)
-library(gridExtra)
 n <- 1024
 dat <- data.frame(x = seq(from = 0, to = 1-1/n, length = n), 
                   Doppler = makeDoppler(n),

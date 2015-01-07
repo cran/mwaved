@@ -12,6 +12,7 @@
 #' @details \code{mwaved} uses the WaveD wavelet deconvolution paradigm and is based on the \code{waved} R-package given by Raimondo and Stewart (2007). It generalises the approach by allowing a multichannel signal instead of a single channel signal and allows long memory errors within each channel (independent of each channel). See Kulik, Sapatinas and Wishart (2014) for theoretical results and a short numerical investigation. The \code{mwaved} package also uses the external C FFTW library described in Frigo and Johnson, (2005) to dramatically increase the speed of the computations. Detailed information and instructions for implementation are available at \url{http://www.fftw.org}.
 #' 
 #' @import Rcpp
+#' @useDynLib mwaved mwaved_multiSigma mwaved_multiEstimate mwaved_multiWaveD mwaved_multiThresh mwaved_multiCoef mwaved_multiProj mwaved_waveletThresh
 #' @references 
 #' Frigo, M and Johnson, S.G. (2005) \emph{The design and implementation of FFTW3}, Proceedings of the IEEE \bold{93}, 216--231.
 #' \url{http://dx.doi.org/10.1109/JPROC.2004.840301}
@@ -326,7 +327,7 @@ multiThresh <- function(Y, G = directBlur(nrow(as.matrix(Y)), ncol(as.matrix(Y))
 #' # Create error with custom signal to noise ratio
 #' SNR <- c(10,15,20)
 #' sigma <- sigmaSNR(X, SNR)
-#' if (require(fracdiff)) {
+#' if (requireNamespace("fracdiff", quietly = TRUE)) {
 #'   alpha <- c(0.75, 0.8, 1)
 #' } else {
 #'   alpha <- rep(1, m)
@@ -406,7 +407,7 @@ multiCoef <- function(Y, G = directBlur(nrow(as.matrix(Y)), ncol(as.matrix(Y))),
 #' # Create error with custom signal to noise ratio
 #' SNR <- c(10, 15, 20)
 #' sigma <- sigmaSNR(X, SNR)
-#' if (require(fracdiff)){
+#' if (requireNamespace("fracdiff", quietly = TRUE)){
 #'   alpha <- c(0.75, 0.8, 1)
 #' } else {
 #'   alpha <- rep(1, m)
@@ -471,7 +472,7 @@ waveletThresh <- function(beta, thresh, shrinkType = 'hard'){
 #' # Create error with custom signal to noise ratio
 #' SNR <- c(10, 15, 20)
 #' sigma <- sigmaSNR(X, SNR)
-#' if (require(fracdiff)) {
+#' if (requireNamespace("fracdiff", quietly = TRUE)) {
 #'   alpha <- c(0.75, 0.8, 1)
 #' } else {
 #'   alpha <- rep(1, m)
@@ -537,7 +538,7 @@ multiWaveD <- function(Y, G = directBlur(nrow(as.matrix(Y)), ncol(as.matrix(Y)))
 #' # Create error with custom signal to noise ratio
 #' SNR <- c(10, 15, 20)
 #' sigma <- sigmaSNR(X, SNR)
-#' if (require(fracdiff)) {
+#' if (requireNamespace("fracdiff", quietly = TRUE)) {
 #'   alpha <- c(0.75, 0.8, 1)
 #' } else {
 #'   alpha <- rep(1, m)
