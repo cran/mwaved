@@ -13,7 +13,7 @@ The code is also written with the use of the Rcpp package to help use the extern
 
 The package is being developed at http://github.com/jrwishart/mwaved and any bug reports, comments or suggestions are welcomed at http://github.com/jrwishart/issues
 
-Optional source compilation instructions (currently only tested in Ubuntu, Slackware Linux and Windows 8.1)
+Optional source compilation instructions (currently only tested in Ubuntu, Slackware Linux and Windows 10)
 
 * Ensure you have the FFTW3 libraries installed. For ubuntu this requires `sudo apt-get install libfftw3-dev`. For Windows 8 this requires downloading the windows fftw3 binaries and adding the installed directories to your PATH.
 * Download and install the package from your favourite CRAN repository. That is, run `install.packages('mwaved')` from the R prompt or download the tarball and run `R CMD INSTALL mwaved_1.x.x.tar.gz` (where x.x is replaced with the appropriate version name) from the linux terminal.
