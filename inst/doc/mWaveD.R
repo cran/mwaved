@@ -1,4 +1,4 @@
-## ----setup, echo = FALSE, cache = TRUE-----------------------------------
+## ----setup, echo = FALSE, cache = TRUE----------------------------------------
 library(ggplot2)
 
 shift <- function(x) {
@@ -39,7 +39,7 @@ ggplotTime <- function(G, x = 'time', title, alpha = 1) {
 }
 
 
-## ----firsteg, fig.show = 'hide'------------------------------------------
+## ----firsteg, fig.show = 'hide'-----------------------------------------------
 library(mwaved)
 n <- 1024
 m <- 3
@@ -61,7 +61,7 @@ shift <- function(x) {
 x <- seq(from = -0.5 - 1/n, to = 0.5, length = n)
 matplot(x, shift(Gbox), type = 'l', main = 'Shifted g[j]')
 
-## ----dataplots, fig.show = 'hold', echo = FALSE, results = 'hide'--------
+## ----dataplots, fig.show = 'hold', echo = FALSE, results = 'hide'-------------
 library(mwaved)
 library(ggplot2)
 n <- 1024
@@ -82,7 +82,7 @@ ggplotTime(Xbox, title = "g[l] * f")
 ggplotTime(Gbox, title = "g[l]")
 ggplotTime(Gbox, x = 'shiftedTime', title = 'Shifted g[l]')
 
-## ----simulation-functions, fig.show='hide'-------------------------------
+## ----simulation-functions, fig.show='hide'------------------------------------
 library(mwaved)
 n <- 1024
 x <- seq(from = 0, to = 1 - 1/n, length = n)
@@ -104,7 +104,7 @@ plots <- lapply(1:4, function(i) baseP + geom_line(aes_string(x = 'x', y = signa
 # do.call(grid.arrange,  plots)
 plots
 
-## ----blur-functions, fig.show='hide'-------------------------------------
+## ----blur-functions, fig.show='hide'------------------------------------------
 library(mwaved)
 n <- 1024
 m <- 3
@@ -142,7 +142,7 @@ ggplotTime(Gbox, title = 'Boxcar blur matrices')
 ggplotTime(Gboxfft, x = 'shiftedFreq', title = 'Fourier shifted')
 
 
-## ----noise-sim, fig.show='hide'------------------------------------------
+## ----noise-sim, fig.show='hide'-----------------------------------------------
 library(mwaved)
 n <- 1024
 m <- 3
@@ -155,11 +155,11 @@ DE <- multiNoise(n, sigma = sigmaSNR(signal = Xbox, SNR = c(10, 20 ,30)), alpha 
 Y <- Xbox + DE
 matplot(x, Y, type = 'l', main = 'Y{i,l] = g[j]*f + e[i,l]')
 
-## ----noise-gg-plots, echo = FALSE, message = FALSE, fig.show='hold'------
+## ----noise-gg-plots, echo = FALSE, message = FALSE, fig.show='hold'-----------
 ggplotTime(E, title = 'Long Memory Noise', alpha = 0.5)
 ggplotTime(Y, title = 'Y[i,l] = g[l]*f + e[i,l]')
 
-## ----estimation-example, fig.show='hide'---------------------------------
+## ----estimation-example, fig.show='hide'--------------------------------------
 library(mwaved)
 n <- 1024
 m <- 3
@@ -182,24 +182,24 @@ lines(x, signalEstimate, col = 2)
 ggplotTime(Ysmooth, title = 'Multichannel signal')
 ggplotTime(cbind(signal, signalEstimate), title = "TI mWaveD estimate")
 
-## ----full-multiWaveD, fig.show = 'hide'----------------------------------
+## ----full-multiWaveD, fig.show = 'hide'---------------------------------------
 signalmWaveD <- multiWaveD(Ysmooth, Gsmooth, alpha)
 names(signalmWaveD)
 plot(signalmWaveD)
 
-## ----ggplot-multiWaveD, fig.show = 'hold', results = 'hide', echo = FALSE----
+## ----ggplot-multiWaveD, fig.show = 'hold', results = 'hide', echo = FALSE-----
 plot(signalmWaveD, which = 1)
 plot(signalmWaveD, which = 2)
 plot(signalmWaveD, which = 3)
 plot(signalmWaveD, which = 4)
 
-## ----single-multiWaveD-plot----------------------------------------------
+## ----single-multiWaveD-plot---------------------------------------------------
 plot(signalmWaveD, which = 4)
 
-## ----summary-mWaveD, results = 'markup'----------------------------------
+## ----summary-mWaveD, results = 'markup'---------------------------------------
 summary(signalmWaveD)
 
-## ----smooth-plots, fig.show = 'hold'-------------------------------------
+## ----smooth-plots, fig.show = 'hold'------------------------------------------
 smoothObj <- multiWaveD(Ysmooth, Gsmooth, alpha, resolution = 'smooth')
 plot(smoothObj, which = 2)
 plot(smoothObj, which = 3)
@@ -218,17 +218,17 @@ plot(boxObjSmooth, which = 3)
 plot(boxObjBlock, which = 2)
 plot(boxObjBlock, which = 3)
 
-## ----noisySmooth, fig.show = 'hold'--------------------------------------
+## ----noisySmooth, fig.show = 'hold'-------------------------------------------
 NGsmooth <- Gsmooth + multiNoise(n, sigma = sigmaSNR(Gsmooth, rep(10,3)))
 noisySmoothObj <- multiWaveD(Ysmooth, NGsmooth, alpha, resolution = 'smooth')
 plot(smoothObj, which = 3)
 plot(noisySmoothObj, which = 3)
 
-## ----blockPlots, fig.show = 'hold'---------------------------------------
+## ----blockPlots, fig.show = 'hold'--------------------------------------------
 plot(boxObjBlock, which = 2)
 plot(boxObjBlock, which = 3)
 
-## ----thresholding-plots, results='hide', echo = FALSE--------------------
+## ----thresholding-plots, results='hide', echo = FALSE-------------------------
   library(ggplot2)
   t = 3
   thr = 1
@@ -248,12 +248,12 @@ hardPlot
 softPlot
 garrotePlot
 
-## ----waveletCoef-eg------------------------------------------------------
+## ----waveletCoef-eg-----------------------------------------------------------
 wave <- multiCoef(Ysmooth, Gsmooth, alpha = alpha)
 str(wave)
 names(wave)
 
-## ----plot-waveCoef, fig.show = 'hold'------------------------------------
+## ----plot-waveCoef, fig.show = 'hold'-----------------------------------------
 library(mwaved)
 n <- 1024
 signal <- makeLIDAR(n)
@@ -267,20 +267,20 @@ sigCoefs <- multiCoef(signal)
 plot(sigCoefs)
 plot(rawWave, threshWave)
 
-## ----multiProj, fig.show='hide'------------------------------------------
+## ----multiProj, fig.show='hide'-----------------------------------------------
 x <- seq(from = 0, to = 1 - 1/n, length = n)
 plot(x, multiProj(sigCoefs), ty = 'l', main = 'signal coefs')
 plot(x, multiProj(rawWave), ty = 'l', main = 'noisy signal coefs')
 plot(x, multiProj(threshWave), ty = 'l', main = 'thresholded signal coefs')
 plot(x, multiEstimate(Y), ty = 'l', main = 'TI mWaveD estimate')
 
-## ----multiProj-gg, fig.show='hold', echo = FALSE, results='hide'---------
+## ----multiProj-gg, fig.show='hold', echo = FALSE, results='hide'--------------
 ggplotTime(as.matrix(multiProj(sigCoefs)), title = 'signal coefs')
 ggplotTime(as.matrix(multiProj(rawWave)), title = 'noisy signal coefs')
 ggplotTime(as.matrix(multiProj(threshWave)), title = 'thresholded signal coefs')
 ggplotTime(as.matrix(multiEstimate(Y)), title = 'TI mWaveD estimate')
 
-## ----multiSigma----------------------------------------------------------
+## ----multiSigma---------------------------------------------------------------
 library(mwaved)
 sigma <- c(0.5, 0.75, 2)
 n <- 1024
